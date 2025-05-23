@@ -14,8 +14,8 @@ import seaborn as sns
 from sklearn.decomposition import PCA
 import re
 from sklearn.manifold import TSNE
-from components import GeneDataset, Encoder, Decoder, reparam, weighted_mse
-
+from components import GeneDataset, Encoder, DecoderBig as Decoder, reparam, combined_loss, kl_anneal
+from sklearn.preprocessing import StandardScaler
 def main():
     BASE_DIR = Path(__file__).parent.resolve()
     data_dir = BASE_DIR / "data"
@@ -97,29 +97,28 @@ def main():
 
     # === Prompt 2: Ask whether to use all or individual gene columns
     print(f"\nEnter gene column names (e.g. 'Complement C3', 'Clusterin') or type 'all' to use all columns starting from '{df.columns[start_idx]}'.")
-    gene_names = []
-    while True:
-        g = input("  Gene column: ").strip()
-        if g.lower() == "done":
-            break
-        elif g.lower() == "all":
-            candidate_cols = df.columns[start_idx:]
-            gene_names = [col for col in candidate_cols if pd.api.types.is_numeric_dtype(df[col])]
-            break
-        else:
-            if g not in df.columns:
-                print(f"  Column '{g}' not found. Try again.")
-            elif not pd.api.types.is_numeric_dtype(df[g]):
-                print(f"  Column '{g}' is not numeric and cannot be used.")
-            else:
-                gene_names.append(g)
+    gene_names = ['Complement C3', 'Vitronectin', 'Immunoglobulin heavy constant mu', 'Apolipoprotein A-II', 'Immunoglobulin heavy constant gamma 1', 'Immunoglobulin kappa constant', 'Prothrombin','Apolipoprotein B-100', 'Complement C4-B', 
+                  'Alpha-1-antitrypsin', 'Gelsolin']
+    # while True:
+    #     g = input("  Gene column: ").strip()
+    #     if g.lower() == "done":
+    #         break
+    #     elif g.lower() == "all":
+    #         candidate_cols = df.columns[start_idx:]
+    #         gene_names = [col for col in candidate_cols if pd.api.types.is_numeric_dtype(df[col])]
+    #         break
+    #     else:
+    #         if g not in df.columns:
+    #             print(f"  Column '{g}' not found. Try again.")
+    #         elif not pd.api.types.is_numeric_dtype(df[g]):
+    #             print(f"  Column '{g}' is not numeric and cannot be used.")
+    #         else:
+    #             gene_names.append(g)
 
-    # === Final check to avoid MinMaxScaler crash
-    if not gene_names:
-        print("No valid gene columns selected. Exiting.")
-        exit()
-
-    print("\n")
+    # # === Final check to avoid MinMaxScaler crash
+    # if not gene_names:
+    #     print("No valid gene columns selected. Exiting.")
+    #     exit()
 
     # === Extract expression matrix
     X_raw = df[gene_names].values.astype(np.float32)
@@ -146,30 +145,52 @@ def main():
     ], dtype=np.float32)
     cond_dim = C.shape[1]
 
+    # replace X_small/C_small block with:
     Xtr, Xv, Ctr, Cv = train_test_split(X, C, test_size=0.2, random_state=42)
     train_loader = DataLoader(GeneDataset(Xtr, Ctr), batch_size=128, shuffle=True)
-    val_loader = DataLoader(GeneDataset(Xv, Cv), batch_size=128, shuffle=False)
+    val_loader   = DataLoader(GeneDataset(Xv, Cv), batch_size=128, shuffle=False)
 
-    latent_dim = 256
-    kl_weight = 0.01
+
+    latent_dim = 512  # updated for more capacity
     enc = Encoder(expr_dim, cond_dim, latent_dim)
     dec = Decoder(expr_dim, cond_dim, latent_dim)
-    opt_e = optim.AdamW(enc.parameters(), lr=5e-4)
-    opt_d = optim.AdamW(dec.parameters(), lr=5e-4)
+    opt_e = optim.Adam(enc.parameters(), lr=1e-4)
+    opt_d = optim.Adam(dec.parameters(), lr=1e-4)
 
-    for epoch in range(1, 2000):
+    scheduler_e = optim.lr_scheduler.StepLR(opt_e, step_size=200, gamma=0.9)
+    scheduler_d = optim.lr_scheduler.StepLR(opt_d, step_size=200, gamma=0.9)
+
+    for epoch in range(1, 600):
         enc.train(); dec.train()
+        kl_weight = kl_anneal(epoch, warmup_epochs=50)
         for x_b, c_b in train_loader:
             mu, logv = enc(x_b, c_b)
             z = reparam(mu, logv)
             x_hat = dec(z, c_b)
-            recon_loss = weighted_mse(x_hat, x_b, gene_weights)
+
+            recon_loss = combined_loss(x_hat, x_b, gene_weights)
             kl_loss = -0.5 * (1 + logv - mu.pow(2) - logv.exp()).mean()
-            loss = 10 * recon_loss + kl_weight * kl_loss
+            kl_weight = min(1.0, epoch/300) * 0.01    # cap at 0.05
+            loss = recon_loss + kl_weight * kl_loss
+
+
+
             opt_e.zero_grad(); opt_d.zero_grad()
             loss.backward()
+            #checking if gradients are exploding/vanishing 
+            total_norm = 0
+            for p in enc.parameters():
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item()**2
+            total_norm = total_norm**0.5
+            print(f"[Encoder] Grad norm: {total_norm:.4f}")
             opt_e.step(); opt_d.step()
-        # print(f"Epoch {epoch:03d} | Recon={recon_loss:.4f} | KL={kl_loss:.4f}")
+
+        scheduler_e.step()
+        scheduler_d.step()
+        torch.nn.utils.clip_grad_norm_(enc.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(dec.parameters(), max_norm=1.0)
+
 
     enc.eval(); dec.eval()
     all_t, all_p = [], []
@@ -185,6 +206,7 @@ def main():
     pred_inv = scaler.inverse_transform(np.vstack(all_p))
     rmse = np.sqrt(mean_squared_error(true_inv, pred_inv))
     r2 = r2_score(true_inv, pred_inv)
+    
 
     # Evaluate per-gene R² and save to CSV
     gene_r2_scores = []
@@ -199,7 +221,6 @@ def main():
     r2_csv_path = data_dir / "gene_r2_scores.csv"
     r2_df.to_csv(r2_csv_path, index=False)
     print(f"\nSaved per-gene R² values to: {r2_csv_path}")
-
 
     scaled_rmse = np.sqrt(((np.vstack(all_t) - np.vstack(all_p))**2).mean())
     print(f"\nVal RMSE: {rmse:.4f}, R²: {r2:.4f}, Scaled RMSE: {scaled_rmse:.4f}\n")
@@ -257,24 +278,31 @@ def generate_synthetic_samples(decoder, condition_df, encoder_dict, gene_names,
     df_out.to_csv(output_path, index=False)
     print(f"Saved {n_samples} synthetic samples to {output_path}")
 
-    df_real = pd.read_csv(data_dir / "output.csv")
-    df_fake = pd.read_csv(output_path)
+    df_real = pd.read_csv(data_dir / "input.csv")
+    df_fake = pd.read_csv(data_dir / "output.csv")
     for gene in gene_names:
-        plt.figure(figsize=(6, 4))
-        sns.kdeplot(df_real[gene], label='Real', fill=True)
-        sns.kdeplot(df_fake[gene], label='Synthetic', fill=True)
-        plt.title(f'Distribution Comparison - {gene}')
+    # load real & fake
+        real = df_real[gene].values
+        fake = df_fake[gene].values
+
+        # 1) Plot histogram of counts instead of density:
+        plt.figure(figsize=(6,4))
+        sns.histplot(real, label='Real', stat='count', bins=30, alpha=0.4)
+        sns.histplot(fake, label='Synthetic', stat='count', bins=30, alpha=0.4)
+        plt.title(f'Histogram Counts – {gene}')
         plt.legend()
-        plt.tight_layout()
-        safe_gene = re.sub(r'[^a-zA-Z0-9_-]', '_', gene)
-        safe_gene = re.sub(r'[\\\\/:*?\"<>|\\n\\r\\t]', '_', gene).strip()
-        safe_gene = re.sub(r'[\\/:*?"<>|\n\r\t]', '_', gene).strip()
-        if safe_gene != gene:
-            print(f"Modified filename: '{gene}' → '{safe_gene}'")
-
-        plt.savefig(plot_dir / f"{safe_gene}_distribution_comparison.png")
-
+        plt.savefig(plot_dir/f'{gene}_hist_counts.png')
         plt.close()
+
+        # # 2) Plot KDE but _not_ normalizing each to area=1 (so you see absolute density):
+        # plt.figure(figsize=(6,4))
+        # sns.kdeplot(real, label='Real', fill=True, common_norm=False)
+        # sns.kdeplot(fake, label='Synthetic', fill=True, common_norm=False)
+        # plt.title(f'KDE with common_norm=False – {gene}')
+        # plt.legend()
+        # plt.savefig(plot_dir/f'{gene}_kde_commonnorm_false.png')
+        # plt.close()
+
 
 def plot_pca_tsne(real_csv, synthetic_csv, gene_names, save_dir):
     df_real = pd.read_csv(real_csv)
