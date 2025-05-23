@@ -38,32 +38,34 @@ VAE-GAN-Model/
 4. **Install dependencies**
     pip install -r requirements.txt
 
-**Running the Model**
+## Running the model
+``
     Make sure NP-PC Database(Part).xlsx is in the data/ folder, then run: 
-    ```
-        python main.py
-    ```
 
+        python main.py
+
+``
     You’ll be prompted to enter:
-    ```
+
         Condition columns (e.g. Mod_Charge, NP_Type)
         Gene-expression columns by Excel-style letters (e.g. L, M, N)
-    ```
-
+``
     Outputs:
-    ```
+
         input.csv – cleaned subset of your original data
         data_predictions.csv – generated gene-expression profiles
         Plots (loss curves, predicted vs. original) in plots/
-    ```
 
-**Key Features**
+
+## Key Features
+``
     Conditional generation via VAE-GAN
     Normalization with MinMaxScaler
     Balanced losses: reconstruction, KL divergence, adversarial
     Interactive prompts to choose conditions & genes
     Built-in visualization of training progress & fidelity
 
-**License**
+## License
+``
     MIT License – see the included LICENSE for details.
     Created by Huong Le for academic & research use.
