@@ -25,9 +25,9 @@ VAE-GAN-Model/
    cd VAE-GAN-Model
 2. **Create & activate a virtual environment**
     python -m venv .venv
-    *macOS/Linux*
+    **macOS/Linux**
     source .venv/bin/activate
-    # Windows
+    **Windows**
     .\.venv\Scripts\activate
 3. **Install dependencies**
     pip install -r requirements.txt
