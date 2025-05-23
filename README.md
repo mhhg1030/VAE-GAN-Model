@@ -5,9 +5,9 @@ This project implements a Conditional Variational Autoencoder - Generative Adver
 ## Project Structure
 
 ```
-VAE-GAN-Model/
-├── .venv/                      # Local Python virtual environment (DO NOT upload to GitHub)
-├── copy_model.py              # Main model training and prediction script
+VAE-GAN-Model/                  # Local Python virtual environment (DO NOT upload to GitHub)
+├── components.py              # Main model training and prediction script
+├── main.py       
 ├── NP-PC Database(Part).xlsx  # Input Excel file containing experimental data
 ├── requirements.txt           # Python dependencies
 ├── .gitignore                 # Files/folders to be excluded from Git
