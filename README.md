@@ -24,12 +24,18 @@ VAE-GAN-Model/
    git clone https://github.com/yourusername/VAE-GAN-Model.git
    cd VAE-GAN-Model
 2. **Create & activate a virtual environment**
+   ```bash
     python -m venv .venv
+   ```
     **macOS/Linux**
+   ```
     source .venv/bin/activate
+   ```
     **Windows**
+   ```
     .\.venv\Scripts\activate
-3. **Install dependencies**
+   ```
+4. **Install dependencies**
     pip install -r requirements.txt
 
 ## Running the Model
