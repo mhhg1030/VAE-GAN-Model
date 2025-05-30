@@ -50,19 +50,18 @@ class Decoder(nn.Module):
         self.fc_out = nn.Linear(256, expr_dim)
 
         self.act = nn.LeakyReLU(0.2)
-
+        self.out_act = nn.Sigmoid()
     def forward(self, z, c):
         x = torch.cat([z, c], dim=1)
-
         h1 = self.act(self.bn1(self.fc1(x)))
         h1 = torch.cat([h1, c], dim=1)
-
         h2 = self.act(self.bn2(self.fc2(h1)))
         h2 = torch.cat([h2, c], dim=1)
-
         h3 = self.act(self.bn3(self.fc3(h2)))
-        return self.fc_out(h3)
-
+        out_raw = self.fc_out(h3)
+        x_hat   = self.out_act(out_raw)
+        return x_hat
+    
 def reparam(mu, logv):
     std = (0.5 * logv).exp()
     eps = torch.randn_like(std)

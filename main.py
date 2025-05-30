@@ -118,6 +118,8 @@ def main():
                 if not (0 <= start_gene_idx <= end_gene_idx < len(df.columns)):
                     raise ValueError("Invalid column range.")
                 gene_names = list(df.columns[start_gene_idx:end_gene_idx + 1])
+                # Keep a copy of all gene names for later filtering
+
                 break
             except Exception as e:
                 print(f"  Invalid input: {e}")
@@ -167,11 +169,11 @@ def main():
             for i, v in enumerate(vals)}
         for col, vals in ((col, df[col].unique().tolist()) for col in condition_columns)
     }
-    C = np.array([
-        sum((encoders[col][row[col]] for col in condition_columns), [])
-        for _, row in df.iterrows()
-    ], dtype=np.float32)
-    cond_dim = C.shape[1]
+    C_df = pd.get_dummies(df[condition_columns], drop_first=False)
+    cond_names = C_df.columns.tolist()             # now matches C_df.shape[1]
+    C = C_df.values.astype(np.float32)             # e.g. (110, 40)
+    # cond_dim = C.shape[1]
+    gene_names_all = gene_names.copy()
 
     Xtr_raw, Xv_raw, Ctr, Cv = train_test_split(X_raw, C, test_size=0.2, random_state=42)
 
@@ -179,12 +181,10 @@ def main():
     scaler = MinMaxScaler()
     Xtr = scaler.fit_transform(Xtr_raw)
     Xv = scaler.transform(Xv_raw)
-
-    # Copy gene names for filtering
-    gene_names_all = gene_names.copy()
-
+    latent_dim=256
+    ks_boost = 2.0
     # Call training
-    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, gene_names, gene_names_all, scaler, data_dir, plot_dir)
+    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, latent_dim=latent_dim,ks_boost=ks_boost)
 
 if __name__ == "__main__":
     main()
