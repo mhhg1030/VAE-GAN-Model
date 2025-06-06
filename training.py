@@ -14,13 +14,13 @@ def train_model(
     cond_names,               
     gene_names, gene_names_all,
     scaler, data_dir, plot_dir,
-    latent_dim=256, 
+    latent_dim=64, 
     ks_boost=2.0
 ):
     # --- initialize model & weights ---
     expr_dim = Xtr.shape[1]
     cond_dim = Ctr.shape[1]
-    latent_dim = 256
+    latent_dim = 64
 
     enc = Encoder(expr_dim, cond_dim, latent_dim)
     dec = Decoder(expr_dim, cond_dim, latent_dim)
@@ -123,17 +123,7 @@ def train_model(
         ks_results.append({"Gene": gene, "KS_stat": stat, "p_value": pval})
     pd.DataFrame(ks_results).to_csv(data_dir/"ks_test_results.csv", index=False)
     offenders = {r["Gene"] for r in ks_results if r["p_value"] <= 0.05}
-    # # Sanity‐check one gene
-    # i = 0
-    # rv = val_true_full[:, kept_idx[i]]
-    # sv = val_pred_full[:, kept_idx[i]]
-    # print("Example gene:", gene_names[0])
-    # print("  real_vals:", rv[:5], "… shape:", rv.shape)
-    # print("  synth_vals:", sv[:5], "… shape:", sv.shape)
 
-    # stat, pval = ks_2samp(rv, sv)
-    # print("  KS_stat, pval:", stat, pval)
-    # --- upweight KS offenders and rebuild gene_weights ---
     boost = ks_boost
     weights = []
     for gene, w in zip(gene_names_all, base_w):
@@ -153,8 +143,10 @@ def train_model(
     train_r2 = []
     for i, gene in enumerate(gene_names):
         r2v = r2_score(
-            train_true_full[:, kept_idx][..., i],
-            train_pred_full[:, kept_idx][..., i]
+            # train_true_full[:, kept_idx][..., i],
+            # train_pred_full[:, kept_idx][..., i]
+            train_true_full[..., i],
+            train_pred_full[..., i]
         )
         train_r2.append({"Gene": gene, "R2": r2v})
     pd.DataFrame(train_r2).to_csv(data_dir/"gene_r2_scores.csv", index=False)

@@ -26,7 +26,7 @@ class Encoder(nn.Module):
         self.fc_logv = nn.Linear(256, latent_dim)
 
         self.act = nn.LeakyReLU(0.2)
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.5)
 
     def forward(self, x, c):
         h = torch.cat([x, c], dim=1)

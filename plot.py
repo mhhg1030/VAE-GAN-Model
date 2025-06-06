@@ -8,7 +8,8 @@ import re
 from pathlib import Path
 
 def plot_histogram(true_vals, pred_vals, gene, plot_dir):
-    safe_gene_name = re.sub(r'[\\/*?:"<>|]', "_", gene)
+    safe = re.sub(r'[\\/*?:"<>|]', "_", gene)
+    safe = re.sub(r"[^A-Za-z0-9_\-]", "", safe)
     plt.figure(figsize=(6, 4))
     sns.histplot(true_vals, label='True', color='blue', stat='density', bins=30, kde=True, alpha=0.5)
     sns.histplot(pred_vals, label='Predicted', color='orange', stat='density', bins=30, kde=True, alpha=0.5)
@@ -17,7 +18,7 @@ def plot_histogram(true_vals, pred_vals, gene, plot_dir):
     plt.ylabel("Density")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(Path(plot_dir) / f"{safe_gene_name.replace(' ', '_')}_hist.png")
+    plt.savefig(Path(plot_dir) / f"{safe.replace(' ', '_')}_hist.png")
     plt.close()
 
 def plot_pca_tsne(real_csv, synthetic_csv, gene_names, save_dir):
