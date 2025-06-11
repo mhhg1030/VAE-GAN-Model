@@ -1,0 +1,38 @@
+Gene,Train_RMSE
+Apolipoprotein A-I,2.9219503953967423
+Apolipoprotein E,3.338132328324665
+Immunoglobulin heavy constant mu,2.212721034501611
+Vitronectin,2.6795740576217595
+Clusterin,2.0340286030291397
+Serum albumin,4.7750411266533055
+Immunoglobulin kappa constant,2.6664464581484406
+Immunoglobulin heavy constant gamma 1,1.892767582751367
+Apolipoprotein A-II,1.9080288201240756
+Prothrombin,2.2991578052880457
+Histidine-rich glycoprotein,1.7274221636271723
+Kininogen-1,2.4715564083613213
+Fibrinogen alpha chain,2.3115483980881955
+Transthyretin,1.0375395778782404
+Fibrinogen beta chain,2.572124920518148
+Apolipoprotein C-III,3.257036221821358
+Antithrombin-III,6.099895488906833
+Fibrinogen gamma chain,2.9326126347575383
+C4b-binding protein alpha chain,1.7086627068927043
+Hemoglobin subunit beta,2.7938510168190622
+Immunoglobulin lambda constant 2,1.035996006482944
+Hemoglobin subunit alpha,1.1035509492064728
+Complement C1q subcomponent subunit C,1.2035400368339002
+Serum amyloid A-4 protein,1.069717520298961
+Apolipoprotein C-I,1.228157852548801
+CD5 antigen-like,1.4916090717953325
+Vitamin K-dependent protein S,1.1560071741759286
+Serum amyloid P-component,1.566278999468104
+Immunoglobulin kappa variable 3-20,1.7790414603828744
+Hyaluronan-binding protein 2,1.852899060941651
+Serum amyloid A-1 protein,1.1858772936027078
+Coagulation factor IX,1.0160393676564938
+Lactotransferrin,1.83291721679004
+Coagulation factor X,2.033177327075767
+Profilin-1,1.2602391498918148
+Immunoglobulin kappa variable 1D-33,1.970418737513529
+Immunoglobulin kappa light chain,4.046982929454834

@@ -1,3 +1,4 @@
+# components.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,20 +14,20 @@ class GeneDataset(Dataset):
 class Encoder(nn.Module):
     def __init__(self, expr_dim, cond_dim, latent_dim):
         super().__init__()
-        self.fc1 = nn.Linear(expr_dim + cond_dim, 1024)
-        self.bn1 = nn.BatchNorm1d(1024)
+        self.fc1 = nn.Linear(expr_dim + cond_dim, 2048)
+        self.bn1 = nn.LayerNorm(2048)
 
-        self.fc2 = nn.Linear(1024, 512)
-        self.bn2 = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(2048, 1024)
+        self.bn2 = nn.LayerNorm(1024)
 
-        self.fc3 = nn.Linear(512, 256)
-        self.bn3 = nn.BatchNorm1d(256)
+        self.fc3 = nn.Linear(1024, 512)
+        self.bn3 = nn.LayerNorm(512)
 
-        self.fc_mu = nn.Linear(256, latent_dim)
-        self.fc_logv = nn.Linear(256, latent_dim)
+        self.fc_mu = nn.Linear(512, latent_dim)
+        self.fc_logv = nn.Linear(512, latent_dim)
 
         self.act = nn.LeakyReLU(0.2)
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.4)
 
     def forward(self, x, c):
         h = torch.cat([x, c], dim=1)
@@ -38,19 +39,21 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, expr_dim, cond_dim, latent_dim):
         super().__init__()
-        self.fc1 = nn.Linear(latent_dim + cond_dim, 512)
-        self.bn1 = nn.BatchNorm1d(512)
+        self.fc1 = nn.Linear(latent_dim + cond_dim, 2048)
+        self.bn1 = nn.LayerNorm(2048)
 
-        self.fc2 = nn.Linear(512 + cond_dim, 512)
-        self.bn2 = nn.BatchNorm1d(512)
+        self.fc2 = nn.Linear(2048 + cond_dim, 1024)
+        self.bn2 = nn.LayerNorm(1024)
 
-        self.fc3 = nn.Linear(512 + cond_dim, 256)
-        self.bn3 = nn.BatchNorm1d(256)
+        self.fc3 = nn.Linear(1024 + cond_dim, 512)
+        self.bn3 = nn.LayerNorm(512)
 
-        self.fc_out = nn.Linear(256, expr_dim)
+        self.fc_out = nn.Linear(512, expr_dim)
 
         self.act = nn.LeakyReLU(0.2)
         self.out_act = nn.Sigmoid()
+        self.dropout = nn.Dropout(0.5)
+
     def forward(self, z, c):
         x = torch.cat([z, c], dim=1)
         h1 = self.act(self.bn1(self.fc1(x)))
@@ -71,7 +74,6 @@ def combined_loss(pred, target, weights):
     mse = ((pred - target)**2).mean(dim=0)
     mae = (pred - target).abs().mean(dim=0)
     return (0.5 * mse + 0.5 * mae) @ weights
-
 
 def kl_anneal(epoch, warmup_epochs=300):
     return min(1.0, epoch / warmup_epochs)

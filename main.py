@@ -19,7 +19,9 @@ def main():
     BASE_DIR = Path(__file__).parent.resolve()
     data_dir = BASE_DIR / "data"
     plot_dir = BASE_DIR / "plots"
+    stats_dir = BASE_DIR / "stats"
     plot_dir.mkdir(exist_ok=True)
+    stats_dir.mkdir(exist_ok=True)
 
     # Ask user for Excel filename
     excel_filename = input("Enter the Excel filename (e.g., test.xlsx): ").strip()
@@ -171,7 +173,7 @@ def main():
     print("X_raw.shape:", X_raw.shape)
 
     df_selected = df[condition_columns].reset_index(drop=True).join(pd.DataFrame(X_raw, columns=gene_names))
-    df_selected.to_csv(data_dir / "input.csv", index=False)
+    df_selected.to_csv(stats_dir / "real.csv", index=False)
 
     # Encode conditions and split data 
     encoders = {
@@ -191,10 +193,11 @@ def main():
     scaler = MinMaxScaler()
     Xtr = scaler.fit_transform(Xtr_raw)
     Xv = scaler.transform(Xv_raw)
-    latent_dim=64
+    latent_dim=128
+
     ks_boost = 2.0
     # Call training
-    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, latent_dim=latent_dim,ks_boost=ks_boost)
+    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, stats_dir, latent_dim=latent_dim,ks_boost=ks_boost)
 
 if __name__ == "__main__":
     main()
