@@ -19,7 +19,9 @@ def main():
     BASE_DIR = Path(__file__).parent.resolve()
     data_dir = BASE_DIR / "data"
     plot_dir = BASE_DIR / "plots"
+    stats_dir = BASE_DIR / "stats"
     plot_dir.mkdir(exist_ok=True)
+    stats_dir.mkdir(exist_ok=True)
 
     # Ask user for Excel filename
     excel_filename = input("Enter the Excel filename (e.g., test.xlsx): ").strip()
@@ -157,11 +159,21 @@ def main():
         else:
             print("  Invalid input. Please enter 'Y', 'N', or 'ALL'.")
 
+
+    all_cols = df.columns.tolist()
+    dups = [name for name in set(all_cols) if all_cols.count(name) > 1]
+    print("\n Duplicated column names in df:", dups)
+    df = df.loc[:, ~df.columns.duplicated()]
+    
     X_raw = df[gene_names].values.astype(np.float32)
+    print("\n Number of items in gene_names list: ", len(gene_names))
+
     print(f"\n Selected {len(gene_names)} gene columns. Matrix size: {X_raw.shape}")
+    print("gene_names length:", len(gene_names))
+    print("X_raw.shape:", X_raw.shape)
 
     df_selected = df[condition_columns].reset_index(drop=True).join(pd.DataFrame(X_raw, columns=gene_names))
-    df_selected.to_csv(data_dir / "input.csv", index=False)
+    df_selected.to_csv(stats_dir / "real.csv", index=False)
 
     # Encode conditions and split data 
     encoders = {
@@ -175,16 +187,17 @@ def main():
     # cond_dim = C.shape[1]
     gene_names_all = gene_names.copy()
 
-    Xtr_raw, Xv_raw, Ctr, Cv = train_test_split(X_raw, C, test_size=0.2, random_state=42)
+    Xtr_raw, Xv_raw, Ctr, Cv = train_test_split(X_raw, C, test_size=0.3, random_state=42)
 
     # Normalize gene expression
     scaler = MinMaxScaler()
     Xtr = scaler.fit_transform(Xtr_raw)
     Xv = scaler.transform(Xv_raw)
-    latent_dim=256
+    latent_dim=128
+
     ks_boost = 2.0
     # Call training
-    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, latent_dim=latent_dim,ks_boost=ks_boost)
+    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, stats_dir, latent_dim=latent_dim,ks_boost=ks_boost)
 
 if __name__ == "__main__":
     main()
