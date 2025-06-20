@@ -187,17 +187,28 @@ def main():
     # cond_dim = C.shape[1]
     gene_names_all = gene_names.copy()
 
-    Xtr_raw, Xv_raw, Ctr, Cv = train_test_split(X_raw, C, test_size=0.3, random_state=42)
+    # Split into train, validation, test
+    X_train_raw, X_temp_raw, C_train, C_temp = train_test_split(X_raw, C, test_size=0.3, random_state=42)
+    X_val_raw, X_test_raw, C_val, C_test = train_test_split(X_temp_raw, C_temp, test_size=0.5, random_state=42)
 
-    # Normalize gene expression
+    # Normalize based on training only
     scaler = MinMaxScaler()
-    Xtr = scaler.fit_transform(Xtr_raw)
-    Xv = scaler.transform(Xv_raw)
+    Xtr = scaler.fit_transform(X_train_raw)
+    Xv = scaler.transform(X_val_raw)
+    Xte = scaler.transform(X_test_raw)
+    
     latent_dim=128
-
     ks_boost = 2.0
     # Call training
-    enc, dec, gene_names = train_model(Xtr, Xv, Ctr, Cv, cond_names, gene_names, gene_names_all, scaler, data_dir, plot_dir, stats_dir, latent_dim=latent_dim,ks_boost=ks_boost)
+    enc, dec, gene_names = train_model(
+        Xtr, Xv, Xte,
+        C_train, C_val, C_test,
+        cond_names,
+        gene_names, gene_names_all,
+        scaler, data_dir, plot_dir, stats_dir,
+        latent_dim=latent_dim, ks_boost=ks_boost
+    )
+
 
 if __name__ == "__main__":
     main()

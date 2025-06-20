@@ -1,7 +1,5 @@
-# components.py
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 class GeneDataset(Dataset):
@@ -14,20 +12,20 @@ class GeneDataset(Dataset):
 class Encoder(nn.Module):
     def __init__(self, expr_dim, cond_dim, latent_dim):
         super().__init__()
-        self.fc1 = nn.Linear(expr_dim + cond_dim, 2048)
-        self.bn1 = nn.LayerNorm(2048)
+        self.fc1 = nn.Linear(expr_dim + cond_dim, 1280)
+        self.bn1 = nn.LayerNorm(1280)
 
-        self.fc2 = nn.Linear(2048, 1024)
-        self.bn2 = nn.LayerNorm(1024)
+        self.fc2 = nn.Linear(1280, 768)
+        self.bn2 = nn.LayerNorm(768)
 
-        self.fc3 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(768, 512)
         self.bn3 = nn.LayerNorm(512)
 
         self.fc_mu = nn.Linear(512, latent_dim)
         self.fc_logv = nn.Linear(512, latent_dim)
 
         self.act = nn.LeakyReLU(0.2)
-        self.dropout = nn.Dropout(0.4)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x, c):
         h = torch.cat([x, c], dim=1)
@@ -35,24 +33,24 @@ class Encoder(nn.Module):
         h = self.dropout(self.act(self.bn2(self.fc2(h))))
         h = self.act(self.bn3(self.fc3(h)))
         return self.fc_mu(h), self.fc_logv(h)
-    
+
 class Decoder(nn.Module):
     def __init__(self, expr_dim, cond_dim, latent_dim):
         super().__init__()
-        self.fc1 = nn.Linear(latent_dim + cond_dim, 2048)
-        self.bn1 = nn.LayerNorm(2048)
+        self.fc1 = nn.Linear(latent_dim + cond_dim, 1280)
+        self.bn1 = nn.LayerNorm(1280)
 
-        self.fc2 = nn.Linear(2048 + cond_dim, 1024)
-        self.bn2 = nn.LayerNorm(1024)
+        self.fc2 = nn.Linear(1280 + cond_dim, 768)
+        self.bn2 = nn.LayerNorm(768)
 
-        self.fc3 = nn.Linear(1024 + cond_dim, 512)
+        self.fc3 = nn.Linear(768 + cond_dim, 512)
         self.bn3 = nn.LayerNorm(512)
 
         self.fc_out = nn.Linear(512, expr_dim)
 
         self.act = nn.LeakyReLU(0.2)
         self.out_act = nn.Sigmoid()
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, z, c):
         x = torch.cat([z, c], dim=1)
@@ -62,9 +60,9 @@ class Decoder(nn.Module):
         h2 = torch.cat([h2, c], dim=1)
         h3 = self.act(self.bn3(self.fc3(h2)))
         out_raw = self.fc_out(h3)
-        x_hat   = self.out_act(out_raw)
+        x_hat = self.out_act(out_raw)
         return x_hat
-    
+
 def reparam(mu, logv):
     std = (0.5 * logv).exp()
     eps = torch.randn_like(std)
@@ -74,6 +72,26 @@ def combined_loss(pred, target, weights):
     mse = ((pred - target)**2).mean(dim=0)
     mae = (pred - target).abs().mean(dim=0)
     return (0.5 * mse + 0.5 * mae) @ weights
+
+def weighted_mse_loss(pred, target, weight_pos=10.0, weight_zero=1.0):
+    weights = torch.where(target > 0, weight_pos, weight_zero)
+    loss = ((pred - target) ** 2 * weights).mean()
+    return loss
+
+# def force_nonzero_weighted_mse(pred, target, weight_pos=10.0, weight_zero=1.0, under_penalty=5.0):
+#     zero_mask = (target == 0)
+#     pos_mask  = ~zero_mask
+
+#     pred = pred.clone()
+#     pred[zero_mask] = 0.0
+
+#     weights = torch.where(pos_mask, weight_pos, weight_zero)
+#     weighted_mse = ((pred - target) ** 2 * weights)[pos_mask].mean()
+
+#     under_pred = ((pred < 1e-3) & pos_mask)
+#     penalty = under_pred.float().sum() * under_penalty / (pos_mask.float().sum() + 1e-5)
+
+#     return weighted_mse + penalty
 
 def kl_anneal(epoch, warmup_epochs=300):
     return min(1.0, epoch / warmup_epochs)
