@@ -8,23 +8,28 @@ import re
 from pathlib import Path
 
 def plot_histogram(true_vals, pred_vals, gene, plot_dir):
+    # Sanitize filename
     safe = re.sub(r'[\\/*?:"<>|]', "_", gene)
     safe = re.sub(r"[^A-Za-z0-9_\-]", "", safe)
+
     plt.figure(figsize=(6, 4))
-    # sns.histplot(true_vals, label='True', color='blue', stat='density', bins=30, kde=True, alpha=0.5)
-    true_vals = np.log1p(true_vals)  # log1p(x) = log(1 + x), safe for zero
-    pred_vals = np.log1p(pred_vals)
-    sns.histplot(true_vals, color='blue', label='True', kde=False, stat='density',  alpha=0.6)
-    sns.histplot(pred_vals, color='orange', label='Predicted', kde=False, stat='density', alpha=0.6)
-    # sns.histplot(pred_vals, label='Predicted', color='orange', stat='density', bins=30, kde=True, alpha=0.5)
+
+    # Plot raw counts instead of density
+    sns.histplot(true_vals, label='True', color='blue', stat='count', bins=100, alpha=0.5)
+    sns.histplot(pred_vals, label='Predicted', color='orange', stat='count', bins=100, alpha=0.5)
+
     plt.title(f"{gene} – True vs Predicted")
     plt.xlabel("Gene Expression")
-    plt.ylabel("Density")
-    # plt.xlim(0, np.percentile(np.concatenate([true_vals, pred_vals]), 95))  # ignore outliers
-    plt.ylim(0, 350)
+    plt.ylabel("Count")
+
+    # Optional: Limit x-axis to ignore extreme outliers
+    all_vals = np.concatenate([true_vals, pred_vals])
+    low, high = np.percentile(all_vals, [0.5, 99.5])
+    plt.xlim(low, high)
+
     plt.legend()
     plt.tight_layout()
-    plt.savefig(Path(plot_dir) / f"{safe.replace(' ', '_')}_hist.png")
+    plt.savefig(Path(plot_dir) / f"{safe}_hist.png")
     plt.close()
 
 def plot_pca_tsne(real_csv, synthetic_csv, gene_names, save_dir):

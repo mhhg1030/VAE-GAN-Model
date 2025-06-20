@@ -188,7 +188,7 @@ def main():
     gene_names_all = gene_names.copy()
 
     # Split into train, validation, test
-    X_train_raw, X_temp_raw, C_train, C_temp = train_test_split(X_raw, C, test_size=0.3, random_state=42)
+    X_train_raw, X_temp_raw, C_train, C_temp = train_test_split(X_raw, C, test_size=0.4, random_state=42)
     X_val_raw, X_test_raw, C_val, C_test = train_test_split(X_temp_raw, C_temp, test_size=0.5, random_state=42)
 
     # Normalize based on training only
@@ -198,15 +198,13 @@ def main():
     Xte = scaler.transform(X_test_raw)
     
     latent_dim=128
-    ks_boost = 2.0
     # Call training
     enc, dec, gene_names = train_model(
         Xtr, Xv, Xte,
         C_train, C_val, C_test,
-        cond_names,
         gene_names, gene_names_all,
-        scaler, data_dir, plot_dir, stats_dir,
-        latent_dim=latent_dim, ks_boost=ks_boost
+        scaler, plot_dir, stats_dir,
+        latent_dim=latent_dim
     )
 
 

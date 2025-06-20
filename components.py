@@ -63,6 +63,32 @@ class Decoder(nn.Module):
         x_hat = self.out_act(out_raw)
         return x_hat
 
+class Discriminator(nn.Module):
+    def __init__(self, expr_dim, cond_dim):
+        super().__init__()
+        self.fc1 = nn.Linear(expr_dim + cond_dim, 1024)
+        self.bn1 = nn.BatchNorm1d(1024)
+        
+        self.fc2 = nn.Linear(1024, 512)
+        self.bn2 = nn.BatchNorm1d(512)
+
+        self.fc3 = nn.Linear(512, 256)
+        self.bn3 = nn.BatchNorm1d(256)
+
+        self.fc_out = nn.Linear(256, 1)
+        
+        self.act = nn.LeakyReLU(0.2)
+        self.dropout = nn.Dropout(0.3)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x, c):
+        h = torch.cat([x, c], dim=1)
+        h = self.dropout(self.act(self.bn1(self.fc1(h))))
+        h = self.dropout(self.act(self.bn2(self.fc2(h))))
+        h = self.dropout(self.act(self.bn3(self.fc3(h))))
+        return self.sigmoid(self.fc_out(h))
+
+
 def reparam(mu, logv):
     std = (0.5 * logv).exp()
     eps = torch.randn_like(std)
@@ -77,21 +103,6 @@ def weighted_mse_loss(pred, target, weight_pos=10.0, weight_zero=1.0):
     weights = torch.where(target > 0, weight_pos, weight_zero)
     loss = ((pred - target) ** 2 * weights).mean()
     return loss
-
-# def force_nonzero_weighted_mse(pred, target, weight_pos=10.0, weight_zero=1.0, under_penalty=5.0):
-#     zero_mask = (target == 0)
-#     pos_mask  = ~zero_mask
-
-#     pred = pred.clone()
-#     pred[zero_mask] = 0.0
-
-#     weights = torch.where(pos_mask, weight_pos, weight_zero)
-#     weighted_mse = ((pred - target) ** 2 * weights)[pos_mask].mean()
-
-#     under_pred = ((pred < 1e-3) & pos_mask)
-#     penalty = under_pred.float().sum() * under_penalty / (pos_mask.float().sum() + 1e-5)
-
-#     return weighted_mse + penalty
 
 def kl_anneal(epoch, warmup_epochs=300):
     return min(1.0, epoch / warmup_epochs)

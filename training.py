@@ -6,22 +6,21 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
+import torch.nn.functional as F
 
-from components import GeneDataset, Encoder, Decoder, reparam, combined_loss, kl_anneal, weighted_mse_loss
+from components import GeneDataset, Encoder, Decoder, Discriminator, reparam, combined_loss, kl_anneal, weighted_mse_loss
 from plot import plot_histogram, plot_pca_tsne
 
 def train_model(
     Xtr, Xv, Xte,
     Ctr, Cv, Cte,
-    cond_names,
     gene_names, gene_names_all,
-    scaler, data_dir, plot_dir,
+    scaler, plot_dir,
     stats_dir,
     latent_dim=128,
     recon_alpha=2.0,
     kl_beta=0.1,
     max_lr=3e-4,
-    ks_boost=2.0
 ):
     raw_combined = np.vstack([Xtr, Xv, Xte])
     zero_pattern = (raw_combined == 0.0)
@@ -32,6 +31,7 @@ def train_model(
 
     enc = Encoder(expr_dim, cond_dim, latent_dim)
     dec = Decoder(expr_dim, cond_dim, latent_dim)
+    dis = Discriminator(expr_dim, cond_dim)
 
     base_w = 1.0 / (Xtr.std(axis=0) + 1e-4)
     base_w /= base_w.sum()
@@ -43,34 +43,58 @@ def train_model(
 
     opt_e = torch.optim.Adam(enc.parameters(), lr=max_lr, betas=(0.5, 0.9), weight_decay=1e-7)
     opt_d = torch.optim.Adam(dec.parameters(), lr=max_lr, betas=(0.5, 0.9), weight_decay=1e-7)
+    opt_dis = torch.optim.Adam(dis.parameters(), lr=max_lr)
 
     sched_e = OneCycleLR(opt_e, max_lr=max_lr,
                          steps_per_epoch=len(train_loader),
                          epochs=num_epochs, pct_start=0.1,
-                         anneal_strategy='cos', div_factor=25.0)
+                         anneal_strategy='cos', div_factor=7.0)
     sched_d = OneCycleLR(opt_d, max_lr=max_lr,
                          steps_per_epoch=len(train_loader),
                          epochs=num_epochs, pct_start=0.1,
-                         anneal_strategy='cos', div_factor=25.0)
+                         anneal_strategy='cos', div_factor=7.0)
 
     best_val_loss = float('inf')
     epochs_no_improve = 0
     patience = 50
 
     for epoch in range(1, num_epochs+1):
-        enc.train(); dec.train()
+        enc.train(); dec.train(); dis.train()
         kl_weight = kl_anneal(epoch, warmup_epochs=200)
         epoch_loss = 0.0
+        adv_alpha = 0.2  # You can tune this weight later
 
         for x_b, c_b in tqdm(train_loader, desc="Batches", leave=False):
+            #  Forward pass through encoder-decoder 
             mu, logv = enc(x_b, c_b)
             z = reparam(mu, logv)
             x_hat = dec(z, c_b)
 
-            recon = weighted_mse_loss(x_hat, x_b, weight_pos=10.0, weight_zero=1.0)
-            kl = -0.5 * (1 + logv - mu.pow(2) - logv.exp()).mean()
-            loss = recon_alpha * recon + kl_beta * kl_weight * kl
+            #  Labels for adversarial loss 
+            real_labels = torch.ones(x_b.size(0), 1, device=x_b.device)
+            fake_labels = torch.zeros(x_b.size(0), 1, device=x_b.device)
 
+            #  Train Discriminator 
+            dis_real = dis(x_b, c_b)
+            dis_fake = dis(x_hat.detach(), c_b)
+            loss_dis = F.binary_cross_entropy(dis_real, real_labels) + \
+                       F.binary_cross_entropy(dis_fake, fake_labels)
+            opt_dis.zero_grad()
+            loss_dis.backward()
+            opt_dis.step()
+
+            #  Generator adversarial loss 
+            dis_fake_for_gen = dis(x_hat, c_b)
+            adv_loss = F.binary_cross_entropy(dis_fake_for_gen, real_labels)
+
+            #  VAE reconstruction + KL loss 
+            recon = weighted_mse_loss(x_hat, x_b, weight_pos=13.0, weight_zero=1.0)
+            kl = -0.5 * (1 + logv - mu.pow(2) - logv.exp()).mean()
+
+            #  Total VAE-GAN loss 
+            loss = recon_alpha * recon + kl_beta * kl_weight * kl + adv_alpha * adv_loss
+
+            #  Optimize encoder and decoder 
             opt_e.zero_grad(); opt_d.zero_grad()
             loss.backward()
             opt_e.step(); opt_d.step()
@@ -81,6 +105,7 @@ def train_model(
         avg_train = epoch_loss / len(train_loader.dataset)
         tqdm.write(f"Epoch {epoch} train loss: {avg_train:.4f}")
 
+        #  Validation 
         enc.eval(); dec.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -150,7 +175,7 @@ def train_model(
     train_true = train_true_full[:, kept_idx]
     train_pred = train_pred_full[:, kept_idx]
 
-    # --- RMSE and R² ---
+    #  RMSE and R² 
     def evaluate_split(name, y_true, y_pred):
         rmse = np.sqrt(mean_squared_error(y_true, y_pred))
         r2s = [r2_score(y_true[:, i], y_pred[:, i]) for i in range(y_true.shape[1])]
